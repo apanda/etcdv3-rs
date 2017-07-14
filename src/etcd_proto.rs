@@ -1,14 +1,15 @@
 use base64;
 /// Hand crafted structures from the `etcd` protobuf. This allows us to call into etcd from Rust.
 /// Some weird things to note when adding to this file:
-///   - All fields in proto3 are optional -- as a result every field needs to be marked as an `Option<T>`. This is
-///   necessary to guarantee that changes in the `etcd` implementation do not cause problems.
-///   - The `gRPC` bridge converse 64-bit numbers into Strings. 
+///   - All fields in proto3 are optional -- as a result every field needs to be marked as an
+///   `Option<T>`. This is necessary to guarantee that changes in the `etcd` implementation
+///   do not cause problems.
+///   - The `gRPC` bridge converse 64-bit numbers into Strings.
 
 /// Common response header included in every `etcd` response.
 #[derive(Deserialize)]
 pub struct ResponseHeader {
-    pub cluster_id: Option<String>, // `Option<String>` instead of `u64` since this is what grpc does.
+    pub cluster_id: Option<String>,
     pub member_id: Option<String>,
     pub revision: Option<String>,
     pub raft_term: Option<String>,
@@ -28,15 +29,23 @@ pub struct KeyValue {
 impl KeyValue {
     pub fn key(&self) -> Option<String> {
         match self.key {
-            Some(ref k) => base64::decode(&k).ok().map(|v| String::from_utf8(v).unwrap()),
-            None => None
+            Some(ref k) => {
+                base64::decode(&k).ok().map(
+                    |v| String::from_utf8(v).unwrap(),
+                )
+            }
+            None => None,
         }
     }
 
     pub fn value(&self) -> Option<String> {
         match self.value {
-            Some(ref v) => base64::decode(&v).ok().map(|v| String::from_utf8(v).unwrap()),
-            None => None
+            Some(ref v) => {
+                base64::decode(&v).ok().map(
+                    |v| String::from_utf8(v).unwrap(),
+                )
+            }
+            None => None,
         }
     }
 }
@@ -85,7 +94,7 @@ impl PutRequest {
 pub enum SortOrder {
     NONE,
     ASCEND,
-    DESCEND
+    DESCEND,
 }
 
 // This is by default turned into a string by `serde_json`, hence encoding it correctly.
@@ -95,7 +104,7 @@ pub enum SortTarget {
     CREATE,
     VERSION,
     MOD,
-    VALUE
+    VALUE,
 }
 
 #[derive(Serialize, Default)]
@@ -136,11 +145,14 @@ pub struct RangeResponse {
     pub header: Option<ResponseHeader>,
     pub kvs: Option<Vec<KeyValue>>, // Optional since is only set when prev_kv is true.
     pub more: Option<bool>,
-    count: Option<String>
+    count: Option<String>,
 }
 
 impl RangeResponse {
     pub fn count(&self) -> usize {
-        self.count.as_ref().map(|v| v.parse::<usize>().unwrap()).unwrap_or(0)
+        self.count
+            .as_ref()
+            .map(|v| v.parse::<usize>().unwrap())
+            .unwrap_or(0)
     }
 }
