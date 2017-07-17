@@ -58,6 +58,10 @@ mod tests {
             SortTarget::VALUE,
         )).unwrap();
         println!("{}", json_range);
+
+        let json_watch = serde_json::to_string(&WatchRequest::new_create_request(
+                                                WatchCreateRequest::new_for_key("hello"))).unwrap();
+        println!("{}", json_watch);
     }
 
     #[test]
@@ -119,7 +123,7 @@ mod tests {
     fn action_test() {
         let mut core = tokio_core::reactor::Core::new().unwrap();
         let session = etcd_actions::EtcdSession::new(&core.handle(), "http://localhost:2379");
-        let val =  "booooom";
+        let val = "booooom";
         let work = session.put("action", val);
         core.run(work).unwrap();
         let work = session.get("action");

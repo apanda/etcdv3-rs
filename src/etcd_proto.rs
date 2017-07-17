@@ -143,7 +143,7 @@ impl RangeRequest {
 #[derive(Deserialize)]
 pub struct RangeResponse {
     pub header: Option<ResponseHeader>,
-    pub kvs: Option<Vec<KeyValue>>, // Optional since is only set when prev_kv is true.
+    pub kvs: Option<Vec<KeyValue>>,
     pub more: Option<bool>,
     count: Option<String>,
 }
@@ -155,4 +155,93 @@ impl RangeResponse {
             .map(|v| v.parse::<usize>().unwrap())
             .unwrap_or(0)
     }
+}
+
+// This looks different from everything else so we can retain `oneof` semantics.
+
+#[derive(Serialize)]
+pub enum WatchRequest {
+    #[serde(rename="create_request")]
+    CreateRequest(WatchCreateRequest),
+    #[serde(rename="cancel_request")]
+    CancelRequest(WatchCancelRequest)
+}
+
+impl WatchRequest {
+    pub fn new_create_request(create_request: WatchCreateRequest) -> WatchRequest {
+        WatchRequest::CreateRequest(create_request)
+    }
+
+    pub fn new_cancel_request(cancel_request: WatchCancelRequest) -> WatchRequest {
+        WatchRequest::CancelRequest(cancel_request)
+    }
+}
+
+#[derive(Serialize, Default)]
+pub struct WatchCancelRequest {
+    pub watch_id: Option<String>
+}
+
+impl WatchCancelRequest {
+    pub fn new(watch_id: i64) -> WatchCancelRequest {
+        WatchCancelRequest {
+            watch_id: Some(watch_id.to_string())
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub enum FilterType {
+    NOPUT,
+    NODELETE,
+}
+
+#[derive(Serialize, Default)]
+pub struct WatchCreateRequest {
+    pub key: Option<String>,
+    pub range_end: Option<String>,
+    pub start_revision: Option<String>,
+    pub progress_notify: Option<bool>,
+    pub filters: Option<Vec<FilterType>>,
+    pub prev_kv: Option<bool>,
+}
+
+impl WatchCreateRequest {
+    pub fn new_for_key(key: &str) -> WatchCreateRequest {
+        WatchCreateRequest {
+            key: Some(base64::encode(key)),
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum EventType {
+    PUT,
+    DELETE,
+}
+
+#[derive(Deserialize)]
+pub struct Event {
+    #[serde(rename = "type")]
+    etype: Option<EventType>,
+    pub kv: Option<KeyValue>,
+    pub prev_kv: Option<KeyValue>,
+}
+
+impl Event {
+    pub fn event_type(&self) -> &Option<EventType> {
+        &self.etype
+    }
+}
+
+#[derive(Deserialize)]
+pub struct WatchResponse {
+    pub header: Option<ResponseHeader>,
+    pub watch_id: Option<String>,
+    pub created: Option<bool>,
+    pub canceled: Option<bool>,
+    pub compact_revision: Option<String>,
+    pub cancel_reason: Option<String>,
+    pub events: Option<Vec<Event>>
 }

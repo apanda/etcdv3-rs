@@ -39,22 +39,25 @@ impl EtcdSession {
         ))
     }
 
-    pub fn get(&self, key: &str) -> Box<Future<Error = hyper::Error, Item=String>> {
+    pub fn get(&self, key: &str) -> Box<Future<Error = hyper::Error, Item = String>> {
         let uri = format!("{}{}", self.uri, RANGE_ENDPOINT)
-                         .parse::<hyper::Uri>()
-                         .unwrap();
+            .parse::<hyper::Uri>()
+            .unwrap();
 
         let mut range_request = hyper::Request::new(hyper::Method::Post, uri);
         range_request.set_body(serde_json::to_string(&RangeRequest::new(key)).unwrap());
-        Box::new(self.client.request(range_request).and_then(
-            |res| { res.body().concat2()
-        }).and_then(|body| {
-            let v: RangeResponse = serde_json::from_slice(&body).unwrap();
-            if v.count() == 1 {
-                Ok(String::from(v.kvs.as_ref().unwrap()[0].value().unwrap()))
-            } else {
-                Ok(String::from(""))
-            }
-        }))
+        Box::new(
+            self.client
+                .request(range_request)
+                .and_then(|res| res.body().concat2())
+                .and_then(|body| {
+                    let v: RangeResponse = serde_json::from_slice(&body).unwrap();
+                    if v.count() == 1 {
+                        Ok(String::from(v.kvs.as_ref().unwrap()[0].value().unwrap()))
+                    } else {
+                        Ok(String::from(""))
+                    }
+                }),
+        )
     }
 }
