@@ -64,6 +64,7 @@ impl EtcdSession {
         )
     }
 
+    /// Create a new stream that reports changes to a key.
     pub fn watch(
         &self,
         key: &str,
@@ -80,6 +81,35 @@ impl EtcdSession {
         watch_request.set_body(
             serde_json::to_string(&WatchRequest::new_create_request(
                 WatchCreateRequest::new_for_key(key),
+            )).unwrap(),
+        );
+        Box::new(self.client.request(watch_request).and_then(|res| {
+            Ok(Box::new(res.body().map(|chunk| {
+                let outer: WatchStreamResponse = serde_json::from_slice(&chunk).unwrap();
+                let inner = outer.result.unwrap();
+                inner
+            })) as
+                Box<Stream<Item = WatchResponse, Error = hyper::Error>>)
+        }))
+    }
+
+    /// Create a new stream that reports changes to a key.
+    pub fn watch_pfx(
+        &self,
+        key: &str,
+    ) -> Box<
+        Future<
+            Error = hyper::Error,
+            Item = Box<Stream<Item = WatchResponse, Error = hyper::Error>>,
+        >,
+    > {
+        let uri = format!("{}{}", self.uri, WATCH_ENDPOINT)
+            .parse::<hyper::Uri>()
+            .unwrap();
+        let mut watch_request = hyper::Request::new(hyper::Method::Post, uri);
+        watch_request.set_body(
+            serde_json::to_string(&WatchRequest::new_create_request(
+                WatchCreateRequest::new_for_prefix(key),
             )).unwrap(),
         );
         Box::new(self.client.request(watch_request).and_then(|res| {

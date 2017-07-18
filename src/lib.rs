@@ -207,4 +207,48 @@ mod tests {
             _ => panic!("Something went wrong"),
         }
     }
+
+    #[test]
+    fn watch_range_test() {
+        let mut core = tokio_core::reactor::Core::new().unwrap();
+        let session = etcd_actions::EtcdSession::new(&core.handle(), "http://localhost:2379");
+        let work = session.watch_pfx("kettle");
+        let stream = core.run(work).unwrap(); // We have now registered a watch?
+        let new_put = session.put("kettle-black", "boiled");
+        core.run(new_put).unwrap(); // We have now triggered the watch.
+        let work = stream.for_each(|inner| {
+            if let Some(_) = inner.created {
+                println!("Watch created");
+                Ok(())
+            } else if let Some(ref events) = inner.events {
+                println!("Event received");
+                assert!(events.len() == 1, "Should not have more than one event");
+                let ev = &events[0];
+                assert_eq!(
+                    ev.kv.as_ref().unwrap().key(),
+                    Some(String::from("kettle-black"))
+                );
+                assert_eq!(
+                    ev.kv.as_ref().unwrap().value(),
+                    Some(String::from("boiled"))
+                );
+                // Ugly hack to timeout the watch so we don't wait forever.
+                Err(hyper::Error::Io(
+                    io::Error::new(io::ErrorKind::TimedOut, "Done"),
+                ))
+            } else {
+                panic!("Unexpected result")
+            }
+        });
+        match core.run(work) {
+            Ok(_) => panic!("Should not return OK"),
+            Err(hyper::Error::Io(err)) => {
+                assert!(
+                    err.kind() == io::ErrorKind::TimedOut,
+                    "IO error, but not a timeout"
+                )
+            }
+            _ => panic!("Something went wrong"),
+        }
+    }
 }

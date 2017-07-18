@@ -214,6 +214,17 @@ impl WatchCreateRequest {
             ..Default::default()
         }
     }
+    pub fn new_for_prefix(key: &str) -> WatchCreateRequest {
+        let mut range_end = String::from(key).into_bytes();
+        let end = key.len() - 1;
+        //let new_char = range_end[end] + 1;
+        range_end[end] += 1;
+        WatchCreateRequest {
+            key: Some(base64::encode(key)),
+            range_end: Some(base64::encode(&range_end[..])),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
