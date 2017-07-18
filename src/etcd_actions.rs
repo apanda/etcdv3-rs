@@ -64,7 +64,15 @@ impl EtcdSession {
         )
     }
 
-    pub fn watch(&self, key: &str) -> Box<Future<Error = hyper::Error, Item = hyper::Body>> {
+    pub fn watch(
+        &self,
+        key: &str,
+    ) -> Box<
+        Future<
+            Error = hyper::Error,
+            Item = Box<Stream<Item = WatchResponse, Error = hyper::Error>>,
+        >,
+    > {
         let uri = format!("{}{}", self.uri, WATCH_ENDPOINT)
             .parse::<hyper::Uri>()
             .unwrap();
@@ -74,8 +82,13 @@ impl EtcdSession {
                 WatchCreateRequest::new_for_key(key),
             )).unwrap(),
         );
-        Box::new(self.client.request(watch_request).and_then(
-            |res| Ok(res.body()),
-        ))
+        Box::new(self.client.request(watch_request).and_then(|res| {
+            Ok(Box::new(res.body().map(|chunk| {
+                let outer: WatchStreamResponse = serde_json::from_slice(&chunk).unwrap();
+                let inner = outer.result.unwrap();
+                inner
+            })) as
+                Box<Stream<Item = WatchResponse, Error = hyper::Error>>)
+        }))
     }
 }

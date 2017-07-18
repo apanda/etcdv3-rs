@@ -172,12 +172,10 @@ mod tests {
         let result = core.run(work).unwrap();
         assert_eq!(result, Some(String::from(val)));
         let work = session.watch("pot");
-        let body = core.run(work).unwrap(); // We have now registered a watch?
+        let stream = core.run(work).unwrap(); // We have now registered a watch?
         let new_put = session.put("pot", "boiled");
         core.run(new_put).unwrap(); // We have now triggered the watch.
-        let work = body.for_each(|chunk| {
-            let outer: WatchStreamResponse = serde_json::from_slice(&chunk).unwrap();
-            let inner = outer.result.as_ref().unwrap();
+        let work = stream.for_each(|inner| {
             if let Some(_) = inner.created {
                 println!("Watch created");
                 Ok(())
