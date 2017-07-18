@@ -134,11 +134,35 @@ impl RangeRequest {
             ..Default::default()
         }
     }
+
     pub fn new_with_sort(key: &str, order: SortOrder, target: SortTarget) -> RangeRequest {
         RangeRequest {
             sort_order: Some(order),
             sort_target: Some(target),
             ..RangeRequest::new(key)
+        }
+    }
+
+    pub fn new_with_prefix(key: &str) -> RangeRequest {
+        let mut range_end = String::from(key).into_bytes();
+        let end = key.len() - 1;
+        range_end[end] += 1;
+        RangeRequest {
+            key: Some(base64::encode(key)),
+            range_end: Some(base64::encode(&range_end[..])),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_with_sort_and_prefix(
+        key: &str,
+        order: SortOrder,
+        target: SortTarget,
+    ) -> RangeRequest {
+        RangeRequest {
+            sort_order: Some(order),
+            sort_target: Some(target),
+            ..RangeRequest::new_with_prefix(key)
         }
     }
 }
@@ -217,7 +241,6 @@ impl WatchCreateRequest {
     pub fn new_for_prefix(key: &str) -> WatchCreateRequest {
         let mut range_end = String::from(key).into_bytes();
         let end = key.len() - 1;
-        //let new_char = range_end[end] + 1;
         range_end[end] += 1;
         WatchCreateRequest {
             key: Some(base64::encode(key)),
