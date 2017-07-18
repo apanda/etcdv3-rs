@@ -5,6 +5,9 @@ use base64;
 ///   `Option<T>`. This is necessary to guarantee that changes in the `etcd` implementation
 ///   do not cause problems.
 ///   - The `gRPC` bridge converse 64-bit numbers into Strings.
+///   - `oneof` needs to be implemented using enums -- `gRPC` bridge barfs if a null element of the
+///   other type is included.
+///   - Stream responses are encoded in a struct with result as a field.
 
 /// Common response header included in every `etcd` response.
 #[derive(Deserialize)]
@@ -161,10 +164,10 @@ impl RangeResponse {
 
 #[derive(Serialize)]
 pub enum WatchRequest {
-    #[serde(rename="create_request")]
+    #[serde(rename = "create_request")]
     CreateRequest(WatchCreateRequest),
-    #[serde(rename="cancel_request")]
-    CancelRequest(WatchCancelRequest)
+    #[serde(rename = "cancel_request")]
+    CancelRequest(WatchCancelRequest),
 }
 
 impl WatchRequest {
@@ -179,14 +182,12 @@ impl WatchRequest {
 
 #[derive(Serialize, Default)]
 pub struct WatchCancelRequest {
-    pub watch_id: Option<String>
+    pub watch_id: Option<String>,
 }
 
 impl WatchCancelRequest {
     pub fn new(watch_id: i64) -> WatchCancelRequest {
-        WatchCancelRequest {
-            watch_id: Some(watch_id.to_string())
-        }
+        WatchCancelRequest { watch_id: Some(watch_id.to_string()) }
     }
 }
 
@@ -215,12 +216,13 @@ impl WatchCreateRequest {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum EventType {
     PUT,
     DELETE,
 }
 
+/// An event from a set of watched keys.
 #[derive(Deserialize)]
 pub struct Event {
     #[serde(rename = "type")]
@@ -230,6 +232,8 @@ pub struct Event {
 }
 
 impl Event {
+    /// Type of event. Currently `etcd` seems to only set this when keys are deleted, puts
+    /// (both for new keys and exisisting keys) do not show up with anything.
     pub fn event_type(&self) -> &Option<EventType> {
         &self.etype
     }
@@ -243,5 +247,10 @@ pub struct WatchResponse {
     pub canceled: Option<bool>,
     pub compact_revision: Option<String>,
     pub cancel_reason: Option<String>,
-    pub events: Option<Vec<Event>>
+    pub events: Option<Vec<Event>>,
+}
+
+#[derive(Deserialize)]
+pub struct WatchStreamResponse {
+    pub result: Option<WatchResponse>,
 }

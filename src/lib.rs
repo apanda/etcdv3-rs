@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 extern crate serde;
 extern crate serde_json;
 extern crate base64;
@@ -22,6 +22,8 @@ mod tests {
     use tokio_core;
     use futures::Future;
     use futures::stream::Stream;
+    use std::str;
+    use std::io;
     #[test]
     fn basic_test() {
         let req = PutRequest::new("hello", "world 22");
@@ -60,7 +62,8 @@ mod tests {
         println!("{}", json_range);
 
         let json_watch = serde_json::to_string(&WatchRequest::new_create_request(
-                                                WatchCreateRequest::new_for_key("hello"))).unwrap();
+            WatchCreateRequest::new_for_key("hello"),
+        )).unwrap();
         println!("{}", json_watch);
     }
 
@@ -70,6 +73,9 @@ mod tests {
             .parse::<hyper::Uri>()
             .unwrap();
         let range_uri = "http://localhost:2379/v3alpha/kv/range"
+            .parse::<hyper::Uri>()
+            .unwrap();
+        let watch_uri = "http://localhost:2379/v3alpha/watch"
             .parse::<hyper::Uri>()
             .unwrap();
         let mut core = tokio_core::reactor::Core::new().unwrap();
@@ -117,6 +123,42 @@ mod tests {
                 Ok(())
             });
         core.run(work).unwrap();
+
+        let mut watch_request = hyper::Request::new(hyper::Method::Post, watch_uri);
+        watch_request.set_body(
+            serde_json::to_string(&WatchRequest::new_create_request(
+                WatchCreateRequest::new_for_key("hello"),
+            )).unwrap(),
+        );
+        let work = client.request(watch_request).and_then(|res| {
+            println!("Response: {}", res.status());
+            res.body().for_each(|body: hyper::Chunk| {
+                let outer: WatchStreamResponse = serde_json::from_slice(&body).unwrap();
+                let v = outer.result.as_ref().unwrap();
+                if let Some(created) = v.created {
+                    println!("Watch created {}", created);
+                } else if let Some(ref events) = v.events {
+                    for event in events {
+                        println!("Body is {}", str::from_utf8(&body).unwrap());
+                        println!("Event type {:?}", event.event_type());
+                        println!("Key {}", event.kv.as_ref().unwrap().key().unwrap());
+                    }
+                };
+                Err(hyper::Error::Io(
+                    io::Error::new(io::ErrorKind::TimedOut, "Done"),
+                ))
+            })
+        });
+        match core.run(work) {
+            Ok(_) => panic!("Should not return OK"),
+            Err(hyper::Error::Io(err)) => {
+                assert!(
+                    err.kind() == io::ErrorKind::TimedOut,
+                    "IO error, but not a timeout"
+                )
+            }
+            _ => panic!("Something went wrong"),
+        }
     }
 
     #[test]
@@ -128,6 +170,43 @@ mod tests {
         core.run(work).unwrap();
         let work = session.get("action");
         let result = core.run(work).unwrap();
-        assert_eq!(result, val);
+        assert_eq!(result, Some(String::from(val)));
+        let work = session.watch("pot");
+        let body = core.run(work).unwrap(); // We have now registered a watch?
+        let new_put = session.put("pot", "boiled");
+        core.run(new_put).unwrap(); // We have now triggered the watch.
+        let work = body.for_each(|chunk| {
+            let outer: WatchStreamResponse = serde_json::from_slice(&chunk).unwrap();
+            let inner = outer.result.as_ref().unwrap();
+            if let Some(_) = inner.created {
+                println!("Watch created");
+                Ok(())
+            } else if let Some(ref events) = inner.events {
+                println!("Event received");
+                assert!(events.len() == 1, "Should not have more than one event");
+                let ev = &events[0];
+                assert_eq!(ev.kv.as_ref().unwrap().key(), Some(String::from("pot")));
+                assert_eq!(
+                    ev.kv.as_ref().unwrap().value(),
+                    Some(String::from("boiled"))
+                );
+                // Ugly hack to timeout the watch so we don't wait forever.
+                Err(hyper::Error::Io(
+                    io::Error::new(io::ErrorKind::TimedOut, "Done"),
+                ))
+            } else {
+                panic!("Unexpected result")
+            }
+        });
+        match core.run(work) {
+            Ok(_) => panic!("Should not return OK"),
+            Err(hyper::Error::Io(err)) => {
+                assert!(
+                    err.kind() == io::ErrorKind::TimedOut,
+                    "IO error, but not a timeout"
+                )
+            }
+            _ => panic!("Something went wrong"),
+        }
     }
 }

@@ -7,9 +7,11 @@ use futures::stream::Stream;
 
 const PUT_ENDPOINT: &str = "/v3alpha/kv/put";
 const RANGE_ENDPOINT: &str = "/v3alpha/kv/range";
+const WATCH_ENDPOINT: &str = "/v3alpha/watch";
 
 pub struct EtcdSession {
     client: hyper::Client<hyper::client::HttpConnector>,
+    _handle: tokio_core::reactor::Handle,
     uri: String,
 }
 
@@ -17,6 +19,7 @@ impl EtcdSession {
     pub fn new(handle: &tokio_core::reactor::Handle, uri: &str) -> EtcdSession {
         EtcdSession {
             client: hyper::Client::new(handle),
+            _handle: handle.clone(),
             uri: String::from(uri),
         }
     }
@@ -39,7 +42,7 @@ impl EtcdSession {
         ))
     }
 
-    pub fn get(&self, key: &str) -> Box<Future<Error = hyper::Error, Item = String>> {
+    pub fn get(&self, key: &str) -> Box<Future<Error = hyper::Error, Item = Option<String>>> {
         let uri = format!("{}{}", self.uri, RANGE_ENDPOINT)
             .parse::<hyper::Uri>()
             .unwrap();
@@ -53,11 +56,26 @@ impl EtcdSession {
                 .and_then(|body| {
                     let v: RangeResponse = serde_json::from_slice(&body).unwrap();
                     if v.count() == 1 {
-                        Ok(String::from(v.kvs.as_ref().unwrap()[0].value().unwrap()))
+                        Ok(v.kvs.as_ref().unwrap()[0].value().clone().map(String::from))
                     } else {
-                        Ok(String::from(""))
+                        Ok(None)
                     }
                 }),
         )
+    }
+
+    pub fn watch(&self, key: &str) -> Box<Future<Error = hyper::Error, Item = hyper::Body>> {
+        let uri = format!("{}{}", self.uri, WATCH_ENDPOINT)
+            .parse::<hyper::Uri>()
+            .unwrap();
+        let mut watch_request = hyper::Request::new(hyper::Method::Post, uri);
+        watch_request.set_body(
+            serde_json::to_string(&WatchRequest::new_create_request(
+                WatchCreateRequest::new_for_key(key),
+            )).unwrap(),
+        );
+        Box::new(self.client.request(watch_request).and_then(
+            |res| Ok(res.body()),
+        ))
     }
 }
