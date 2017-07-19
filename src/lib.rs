@@ -251,4 +251,22 @@ mod tests {
             _ => panic!("Something went wrong"),
         }
     }
+
+    #[test]
+    fn get_range_test() {
+        let mut core = tokio_core::reactor::Core::new().unwrap();
+        let session = etcd_actions::EtcdSession::new(&core.handle(), "http://localhost:2379");
+        core.run(session.put("a:0", "0")).unwrap();
+        core.run(session.put("a:1", "1")).unwrap();
+        core.run(session.put("a:2", "2")).unwrap();
+        core.run(session.put("a:3", "3")).unwrap();
+        core.run(session.put("a:4", "4")).unwrap();
+        core.run(session.put("a:5", "5")).unwrap();
+        core.run(session.put("a:6", "6")).unwrap();
+        let result = core.run(session.get_prefix("a:")).unwrap();
+        assert_eq!(result.len(), 7);
+        for (k, v) in result {
+            println!("{} {}", k, v);
+        }
+    }
 }
