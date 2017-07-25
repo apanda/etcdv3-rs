@@ -64,13 +64,18 @@ impl EtcdSession {
         )
     }
 
-    pub fn get_prefix(&self, key: &str) -> Box<Future<Error = hyper::Error, Item = Vec<(String, String)>>> {
+    pub fn get_prefix(
+        &self,
+        key: &str,
+    ) -> Box<Future<Error = hyper::Error, Item = Vec<(String, String)>>> {
         let uri = format!("{}{}", self.uri, RANGE_ENDPOINT)
             .parse::<hyper::Uri>()
             .unwrap();
 
         let mut range_request = hyper::Request::new(hyper::Method::Post, uri);
-        range_request.set_body(serde_json::to_string(&RangeRequest::new_for_prefix(key)).unwrap());
+        range_request.set_body(
+            serde_json::to_string(&RangeRequest::new_for_prefix(key)).unwrap(),
+        );
         Box::new(
             self.client
                 .request(range_request)
@@ -78,7 +83,16 @@ impl EtcdSession {
                 .and_then(|body| {
                     let v: RangeResponse = serde_json::from_slice(&body).unwrap();
                     if v.count() > 0 {
-                        Ok(v.kvs.as_ref().unwrap().iter().map(|kvs| (kvs.key().unwrap().clone(), kvs.value().unwrap().clone())).collect())
+                        Ok(
+                            v.kvs
+                                .as_ref()
+                                .unwrap()
+                                .iter()
+                                .map(|kvs| {
+                                    (kvs.key().unwrap().clone(), kvs.value().unwrap().clone())
+                                })
+                                .collect(),
+                        )
                     } else {
                         Ok(vec![])
                     }
