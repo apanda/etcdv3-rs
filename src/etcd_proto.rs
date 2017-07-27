@@ -250,7 +250,7 @@ impl WatchCreateRequest {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum EventType {
     PUT,
     DELETE,
