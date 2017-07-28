@@ -100,6 +100,29 @@ impl EtcdSession {
         )
     }
 
+    pub fn get_prefix_raw(
+        &self,
+        prefix: &str,
+    ) -> Box<Future<Error = hyper::Error, Item = RangeResponse>> {
+        let uri = format!("{}{}", self.uri, RANGE_ENDPOINT)
+            .parse::<hyper::Uri>()
+            .unwrap();
+
+        let mut range_request = hyper::Request::new(hyper::Method::Post, uri);
+        range_request.set_body(
+            serde_json::to_string(&RangeRequest::new_for_prefix(prefix)).unwrap(),
+        );
+        Box::new(
+            self.client
+                .request(range_request)
+                .and_then(|res| res.body().concat2())
+                .and_then(|body| {
+                    let v: RangeResponse = serde_json::from_slice(&body).unwrap();
+                    Ok(v)
+                }),
+        )
+    }
+
     /// Create a new stream that reports changes to a key.
     pub fn watch(
         &self,
