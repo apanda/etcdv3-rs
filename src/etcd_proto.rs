@@ -51,6 +51,13 @@ impl KeyValue {
             None => None,
         }
     }
+
+    pub fn value_as_u8(&self) -> Option<Vec<u8>> {
+        match self.value {
+            Some(ref v) => base64::decode(&v).ok(),
+            None => None,
+        }
+    }
 }
 
 /// Response for a `PutRequest`.
